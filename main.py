@@ -1,6 +1,4 @@
-"""
-Etsy order.paid webhook receiver (FastAPI version).
-
+"""Etsy order.paid webhook receiver (FastAPI version).
 Listens for Etsy's order.paid webhook, verifies the request signature,
 and sends an email notification.
 
@@ -11,18 +9,19 @@ Deploy behind any public HTTPS URL (Render, Railway, Fly.io, a VPS, etc.)
 and register that URL as your Etsy webhook endpoint.
 """
 
+from email.mime.text import MIMEText
 import hashlib
 import hmac
 import os
 import smtplib
-from email.mime.text import MIMEText
 
-from fastapi import FastAPI, Header, Request, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.responses import JSONResponse
+import uvicorn
 
 app = FastAPI()
 
-# --- Config (set these as environment variables, never hardcode) ---
+# --- Config / Environment Variables---
 ETSY_WEBHOOK_SECRET = os.environ["ETSY_WEBHOOK_SECRET"]  # the whsec_... value
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
@@ -32,7 +31,9 @@ SMTP_PASSWORD = os.environ["SMTP_PASSWORD"]
 NOTIFY_EMAIL_TO = os.environ["NOTIFY_EMAIL_TO"]
 
 
-def verify_signature(webhook_id: str, timestamp: str, raw_body: bytes, signature: str) -> bool:
+def verify_signature(
+    webhook_id: str, timestamp: str, raw_body: bytes, signature: str
+) -> bool:
     """
     Recompute the HMAC-SHA256 signature and compare it to the one Etsy sent.
 
@@ -67,7 +68,7 @@ async def etsy_webhook(
     webhook_id: str = Header(default="", alias="webhook-id"),
     webhook_timestamp: str = Header(default="", alias="webhook-timestamp"),
     webhook_signature: str = Header(default="", alias="webhook-signature"),
-):
+) -> JSONResponse:
     raw_body = await request.body()
 
     if not verify_signature(webhook_id, webhook_timestamp, raw_body, webhook_signature):
@@ -96,5 +97,7 @@ async def etsy_webhook(
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-    
-app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+
+uvicorn.run("main:app", port=8000, log_config=None)
+
